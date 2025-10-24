@@ -5,11 +5,13 @@ from dotenv import load_dotenv
 
 app = Flask(__name__)
 load_dotenv()
-client = OpenAI(api_key = os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+ASSISTANT_ID = "asst_gaRt3inxCS4dn6mkXGfbNrkN" 
 
 @app.route('/')
 def home():
-    return "Backend IA operativo ✅"
+    return "Backend IA con Agente NERPEL operativo ✅"
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -19,16 +21,30 @@ def chat():
 
     user_message = data['message']
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "Eres un asistente útil."},
-            {"role": "user", "content": user_message}
-        ]
+    thread = client.beta.threads.create()
+
+    client.beta.threads.messages.create(
+        thread_id=thread.id,
+        role="user",
+        content=user_message
     )
 
-    return jsonify({"reply": response.choices[0].message.content})
+    run = client.beta.threads.runs.create(
+        thread_id=thread.id,
+        assistant_id=ASSISTANT_ID
+    )
+
+    import time
+    while True:
+        run_status = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+        if run_status.status == "completed":
+            break
+        time.sleep(1)
+
+    messages = client.beta.threads.messages.list(thread_id=thread.id)
+    reply = messages.data[0].content[0].text.value
+
+    return jsonify({"reply": reply})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
